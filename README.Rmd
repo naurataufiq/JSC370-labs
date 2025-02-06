@@ -163,7 +163,9 @@ medians
 station_median <- met[ , .(
   temp = quantile(temp, probs=.5, na.rm = TRUE),
   wind.sp = quantile(wind.sp, probs=.5, na.rm = TRUE),
-  atm.press = quantile(atm.press, probs=.5, na.rm = TRUE)), by = .(USAFID, STATE)]
+  atm.press = quantile(atm.press, probs=.5, na.rm = TRUE),
+  lat = mean(lat, na.rm = TRUE),
+  lon = mean(lon, na.rm = TRUE)), by = .(USAFID, STATE)]
 station_median
 ```
 ```{r}
@@ -187,7 +189,15 @@ Knit the document, commit your changes, and save it on GitHub. Don't forget to a
 Just like the previous question, you are asked to identify what is the most representative, the median, station per state. This time, instead of looking at one variable at a time, look at the euclidean distance. If multiple stations show in the median, select the one located at the lowest latitude.
 
 ```{r}
+station_median[ , temp_50 := quantile(temp, probs=.5, na.rm = TRUE), by = STATE] 
 
+station_median[ , wind.sp_50 := quantile(wind.sp, probs=.5, na.rm = TRUE), by = STATE] 
+
+station_median[, eudist := sqrt(
+  (temp-temp_50)^2 + (wind.sp-wind.sp_50)^2)]
+
+station_id <- station_median[ , .SD[which.min(eudist)], by = STATE]
+station_id <- merge(x = station_id, y = stations, by.x = "USAFID", by.y = "USAF", all.x = TRUE, all.y = FALSE)
 ```
 
 Knit the doc and save it on GitHub.
@@ -197,7 +207,25 @@ Knit the doc and save it on GitHub.
 For each state, identify what is the station that is closest to the mid-point of the state. Combining these with the stations you identified in the previous question, use `leaflet()` to visualize all ~100 points in the same figure, applying different colors for those identified in this question.
 
 ```{r}
+midpoint <- met[ , .(
+  lon_50 = quantile(lon, probs=.5, na.rm = TRUE),
+  lat_50 = quantile(lat, probs=.5, na.rm = TRUE)), by = STATE]
 
+middle <- merge(x = met, y = midpoint, by = "STATE")
+
+middle[, mid_distance := sqrt(
+  (lon-lon_50)^2 + (lat-lat_50)^2)]
+
+middle_station <- middle[ , .SD[which.min(mid_distance)], by = STATE]
+
+leaflet() %>%
+  addProviderTiles('CartoDB.Positron') %>%
+  addCircles(
+    data = middle_station,
+    lat = ~lat, lng = ~lon, popup = "middle station (geographically)", opacity = 1, radius = 350, color = "purple") %>%
+  addCircles(
+    data = station_id,
+    lat = ~lat, lng = ~lon, popup = "middle station euclidian distance", opacity = 0.9, radius = 350, color = "red")
 ```
 
 Knit the doc and save it on GitHub.
@@ -213,7 +241,19 @@ Start by computing the states' average temperature. Use that measurement to clas
 - High: temp >= 25
 
 ```{r}
+met[, avg_temp := mean(temp, na.rm = TRUE), by = STATE]
 
+met[, temp_level := fifelse(avg_temp < 20, "Low",
+                    fifelse(avg_temp >= 20 & avg_temp < 25, "Mid", "High"))]
+
+summary_table <- met[, .(
+  num_states = uniqueN(STATE),
+  avg_temp = mean(avg_temp, na.rm = TRUE),
+  avg_wind = mean(wind.sp, na.rm = TRUE),
+  avg_pressure = mean(atm.press, na.rm = TRUE)
+), by = temp_level]
+
+print(summary_table)
 ```
 
 Once you are done with that, you can compute the following:
@@ -227,7 +267,17 @@ Once you are done with that, you can compute the following:
 All by the levels described before.
 
 ```{r}
+summary_table <- met[, .(
+  num_entries = .N,  
+  num_NA = sum(is.na(temp) | is.na(wind.sp) | is.na(atm.press)),  
+  num_stations = uniqueN(USAFID), 
+  num_states = uniqueN(STATE),  
+  mean_temp = mean(temp, na.rm = TRUE),
+  mean_wind = mean(wind.sp, na.rm = TRUE),
+  mean_pressure = mean(atm.press, na.rm = TRUE)
+), by = temp_level]
 
+print(summary_table)
 ```
 
 Knit the document, commit your changes, and push them to GitHub. 
@@ -242,5 +292,23 @@ Let's practice running regression models with smooth functions on X. We need the
 - fit both a linear model and a spline model (use `gam()` with a cubic regression spline on wind speed). Summarize and plot the results from the models and interpret which model is the best fit and why.
 
 ```{r}
-
+ggplot(station_median, aes(x = wind.sp, y = temp)) +
+  geom_point() +  
+  geom_smooth(method = "lm", color = "blue") +  
+  geom_smooth(method = "gam", color = "red") +  
+  labs(x = "Median Wind Speed", y = "Median Temperature",
+       title = "Median Temperature vs. Median Wind Speed with Linear and Smooth Regression Lines")
 ```
+
+```{r}
+lm_model <- lm(temp ~ wind.sp, data = station_median)
+summary(lm_model)
+```
+```{r}
+gam_model <- gam(temp ~ s(wind.sp, k = 4), data = station_median)
+summary(gam_model)
+plot(gam_model)
+```
+Linear Model: Straightforward but too simplistic. It doesn't capture the variability of the relationship between wind speed and temperature, as shown by the low R squared.
+Spline Model: While the spline model also doesn’t explain a large portion of the variance, its flexibility allows it to better fit the data, especially in capturing any potential curvature or non-linear behavior. It is likely a better fit than the linear model.
+
