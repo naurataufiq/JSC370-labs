@@ -75,6 +75,7 @@ query_ids <- GET(
 
 # Extracting the content of the response of GET
 ids <- httr::content(query_ids)
+ids
 ```
 
 The query will return an XML object, we can turn it into a character
