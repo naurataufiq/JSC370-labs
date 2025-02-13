@@ -203,32 +203,35 @@ of `pub_char_list`. You can either use `sapply()` as we just did, or
 simply take advantage of vectorization of `stringr::str_extract`
 
 ``` r
-abstracts <- str_extract(pub_char_list, "[YOUR REGULAR EXPRESSION]")
-abstracts <- str_remove_all(abstracts, "[CLEAN ALL THE HTML TAGS]")
-abstracts <- str_remove_all(abstracts, "[CLEAN ALL EXTRA WHITE SPACE AND NEW LINES]")
+abstracts <- str_extract(pub_char_list, "<Abstract>(.*?)</Abstract>")
+abstracts <- str_remove_all(abstracts, "<.*?>")
+abstracts <- str_remove_all(abstracts, "\\s+")
+sum(is.na(abstracts))
 ```
 
 - How many of these don’t have an abstract?
 
-*Answer here.*
+51. 
 
 Now, the title
 
 ``` r
-titles <- str_extract(pub_char_list, "[YOUR REGULAR EXPRESSION]")
-titles <- str_remove_all(titles, "[CLEAN ALL THE HTML TAGS]")
+titles <- str_extract(pub_char_list, "<ArticleTitle>(.*?)</ArticleTitle>")
+titles <- str_remove_all(titles, "<.*?>")
+sum(is.na(titles))
 ```
 
 - How many of these don’t have a title ?
 
-*Answer here.*
+None.
 
 Finally, put everything together into a single `data.frame` and use
 `knitr::kable` to print the results
 
 ``` r
 database <- data.frame(
-  "[DATA TO CONCATENATE]"
+  Title = titles,
+  Abstract = abstracts
 )
 knitr::kable(database)
 ```
